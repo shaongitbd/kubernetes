@@ -507,70 +507,62 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
 
 	// Custom Check for I/O Speed
 	requiredIOSpeed := podRequest.ScalarResources["custom.io-speed"]
-	nodeIOSpeed, ioSpeedOk := nodeInfo.Node().Labels["node.kubernetes.io/io-speed"]
-
-	if ioSpeedOk && requiredIOSpeed > 0 && requiredIOSpeed > nodeIOSpeed {
-		insufficientResources = append(insufficientResources, InsufficientResource{
-			ResourceName: "I/O Speed",
-			Reason:       "Insufficient I/O speed",
-			Requested:    requiredIOSpeed,
-			Used:         nodeIOSpeed,
-			Capacity:     nodeIOSpeed,
-		})
+	if ioSpeedStr, ioSpeedOk := nodeInfo.Node().Labels["node.kubernetes.io/io-speed"]; ioSpeedOk && requiredIOSpeed > 0 {
+		nodeIOSpeed, err := strconv.Atoi(ioSpeedStr)
+		if err == nil && requiredIOSpeed > nodeIOSpeed {
+			insufficientResources = append(insufficientResources, InsufficientResource{
+				ResourceName: "I/O Speed",
+				Reason:       "Insufficient I/O speed",
+				Requested:    requiredIOSpeed,
+				Used:         nodeIOSpeed,
+				Capacity:     nodeIOSpeed,
+			})
+		}
 	}
 
 	// Custom Check for Latency
 	requiredLatency := podRequest.ScalarResources["custom.latency"]
-	nodeLatency, latencyOk := nodeInfo.Node().Labels["node.kubernetes.io/latency"]
-
-	if latencyOk && requiredLatency > 0 && requiredLatency < nodeLatency {
-		insufficientResources = append(insufficientResources, InsufficientResource{
-			ResourceName: "Latency",
-			Reason:       "Insufficient latency capability",
-			Requested:    requiredLatency,
-			Used:         nodeLatency,
-			Capacity:     nodeLatency,
-		})
+	if latencyStr, latencyOk := nodeInfo.Node().Labels["node.kubernetes.io/latency"]; latencyOk && requiredLatency > 0 {
+		nodeLatency, err := strconv.Atoi(latencyStr)
+		if err == nil && requiredLatency < nodeLatency {
+			insufficientResources = append(insufficientResources, InsufficientResource{
+				ResourceName: "Latency",
+				Reason:       "Insufficient latency capability",
+				Requested:    requiredLatency,
+				Used:         nodeLatency,
+				Capacity:     nodeLatency,
+			})
+		}
 	}
 
 	// Custom Check for Bandwidth
 	requiredBandwidth := podRequest.ScalarResources["custom.bandwidth"]
-	nodeBandwidth, bandwidthOk := nodeInfo.Node().Labels["node.kubernetes.io/bandwidth"]
-
-	if bandwidthOk && requiredBandwidth > 0 && requiredBandwidth > nodeBandwidth {
-		insufficientResources = append(insufficientResources, InsufficientResource{
-			ResourceName: "Bandwidth",
-			Reason:       "Insufficient bandwidth",
-			Requested:    requiredBandwidth,
-			Used:         nodeBandwidth,
-			Capacity:     nodeBandwidth,
-		})
+	if bandwidthStr, bandwidthOk := nodeInfo.Node().Labels["node.kubernetes.io/bandwidth"]; bandwidthOk && requiredBandwidth > 0 {
+		nodeBandwidth, err := strconv.Atoi(bandwidthStr)
+		if err == nil && requiredBandwidth > nodeBandwidth {
+			insufficientResources = append(insufficientResources, InsufficientResource{
+				ResourceName: "Bandwidth",
+				Reason:       "Insufficient bandwidth",
+				Requested:    requiredBandwidth,
+				Used:         nodeBandwidth,
+				Capacity:     nodeBandwidth,
+			})
+		}
 	}
 
-
+	// Iterate over scalar resources
 	for rName, rQuant := range podRequest.ScalarResources {
-		// Skip in case request quantity is zero
-		if rQuant == 0 {
+		// Skip in case request quantity is zero or it's an ignored resource
+		if rQuant == 0 || ignoredExtendedResources.Has(string(rName)) || ignoredResourceGroups.Has(strings.Split(string(rName), "/")[0]) {
 			continue
 		}
 
-		if v1helper.IsExtendedResourceName(rName) {
-			// If this resource is one of the extended resources that should be ignored, we will skip checking it.
-			// rName is guaranteed to have a slash due to API validation.
-			var rNamePrefix string
-			if ignoredResourceGroups.Len() > 0 {
-				rNamePrefix = strings.Split(string(rName), "/")[0]
-			}
-			if ignoredExtendedResources.Has(string(rName)) || ignoredResourceGroups.Has(rNamePrefix) {
-				continue
-			}
-		}
-
+		// Check if requested resource exceeds available resource
 		if rQuant > (nodeInfo.Allocatable.ScalarResources[rName] - nodeInfo.Requested.ScalarResources[rName]) {
 			insufficientResources = append(insufficientResources, InsufficientResource{
 				ResourceName: rName,
 				Reason:       fmt.Sprintf("Insufficient %v", rName),
-				Requested:    podRequest.ScalarResources[rName],
+				Requested:    rQuant,
 				Used:         nodeInfo.Requested.ScalarResources[rName],
 				Capacity:     nodeInfo.Allocatable.ScalarResources[rName],
 			})
