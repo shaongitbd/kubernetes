@@ -547,6 +547,36 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
 		})
 	}
 
+
+	for rName, rQuant := range podRequest.ScalarResources {
+		// Skip in case request quantity is zero
+		if rQuant == 0 {
+			continue
+		}
+
+		if v1helper.IsExtendedResourceName(rName) {
+			// If this resource is one of the extended resources that should be ignored, we will skip checking it.
+			// rName is guaranteed to have a slash due to API validation.
+			var rNamePrefix string
+			if ignoredResourceGroups.Len() > 0 {
+				rNamePrefix = strings.Split(string(rName), "/")[0]
+			}
+			if ignoredExtendedResources.Has(string(rName)) || ignoredResourceGroups.Has(rNamePrefix) {
+				continue
+			}
+		}
+
+		if rQuant > (nodeInfo.Allocatable.ScalarResources[rName] - nodeInfo.Requested.ScalarResources[rName]) {
+			insufficientResources = append(insufficientResources, InsufficientResource{
+				ResourceName: rName,
+				Reason:       fmt.Sprintf("Insufficient %v", rName),
+				Requested:    podRequest.ScalarResources[rName],
+				Used:         nodeInfo.Requested.ScalarResources[rName],
+				Capacity:     nodeInfo.Allocatable.ScalarResources[rName],
+			})
+		}
+	}
+
 	return insufficientResources
 }
 
