@@ -455,122 +455,148 @@ func Fits(pod *v1.Pod, nodeInfo *framework.NodeInfo) []InsufficientResource {
 }
 
 
-
 func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignoredExtendedResources, ignoredResourceGroups sets.Set[string]) []InsufficientResource {
-	// Initializing insufficient resources array to include new resources
-	insufficientResources := make([]InsufficientResource, 0, 7)
+    // Initializing insufficient resources array to include new resources
+    insufficientResources := make([]InsufficientResource, 0, 7)
 
-	// Check if the node can host more pods based on allowed pod number
-	allowedPodNumber := nodeInfo.Allocatable.AllowedPodNumber
-	if len(nodeInfo.Pods)+1 > allowedPodNumber {
-		insufficientResources = append(insufficientResources, InsufficientResource{
-			ResourceName: v1.ResourcePods,
-			Reason:       "Too many pods",
-			Requested:    1,
-			Used:         int64(len(nodeInfo.Pods)),
-			Capacity:     int64(allowedPodNumber),
-		})
-	}
+    // Check if the node can host more pods based on allowed pod number
+    allowedPodNumber := nodeInfo.Allocatable.AllowedPodNumber
+    if len(nodeInfo.Pods)+1 > int(allowedPodNumber) { // Convert AllowedPodNumber to int
+        insufficientResources = append(insufficientResources, InsufficientResource{
+            ResourceName: v1.ResourcePods,
+            Reason:       "Too many pods",
+            Requested:    1,
+            Used:         int64(len(nodeInfo.Pods)), // Convert Pods length to int64
+            Capacity:     int64(allowedPodNumber),    // Convert AllowedPodNumber to int64
+        })
+    }
 
-	// CPU Check
-	if podRequest.MilliCPU > 0 && podRequest.MilliCPU > (nodeInfo.Allocatable.MilliCPU - nodeInfo.Requested.MilliCPU) {
-		insufficientResources = append(insufficientResources, InsufficientResource{
-			ResourceName: v1.ResourceCPU,
-			Reason:       "Insufficient cpu",
-			Requested:    podRequest.MilliCPU,
-			Used:         nodeInfo.Requested.MilliCPU,
-			Capacity:     nodeInfo.Allocatable.MilliCPU,
-		})
-	}
+    // CPU Check
+    if podRequest.MilliCPU > 0 && podRequest.MilliCPU > (nodeInfo.Allocatable.MilliCPU - nodeInfo.Requested.MilliCPU) {
+        insufficientResources = append(insufficientResources, InsufficientResource{
+            ResourceName: v1.ResourceCPU,
+            Reason:       "Insufficient cpu",
+            Requested:    podRequest.MilliCPU,
+            Used:         nodeInfo.Requested.MilliCPU,
+            Capacity:     nodeInfo.Allocatable.MilliCPU,
+        })
+    }
 
-	// Memory Check
-	if podRequest.Memory > 0 && podRequest.Memory > (nodeInfo.Allocatable.Memory - nodeInfo.Requested.Memory) {
-		insufficientResources = append(insufficientResources, InsufficientResource{
-			ResourceName: v1.ResourceMemory,
-			Reason:       "Insufficient memory",
-			Requested:    podRequest.Memory,
-			Used:         nodeInfo.Requested.Memory,
-			Capacity:     nodeInfo.Allocatable.Memory,
-		})
-	}
+    // Memory Check
+    if podRequest.Memory > 0 && podRequest.Memory > (nodeInfo.Allocatable.Memory - nodeInfo.Requested.Memory) {
+        insufficientResources = append(insufficientResources, InsufficientResource{
+            ResourceName: v1.ResourceMemory,
+            Reason:       "Insufficient memory",
+            Requested:    podRequest.Memory,
+            Used:         nodeInfo.Requested.Memory,
+            Capacity:     nodeInfo.Allocatable.Memory,
+        })
+    }
 
-	// Ephemeral Storage Check
-	if podRequest.EphemeralStorage > 0 &&
-		podRequest.EphemeralStorage > (nodeInfo.Allocatable.EphemeralStorage - nodeInfo.Requested.EphemeralStorage) {
-		insufficientResources = append(insufficientResources, InsufficientResource{
-			ResourceName: v1.ResourceEphemeralStorage,
-			Reason:       "Insufficient ephemeral-storage",
-			Requested:    podRequest.EphemeralStorage,
-			Used:         nodeInfo.Requested.EphemeralStorage,
-			Capacity:     nodeInfo.Allocatable.EphemeralStorage,
-		})
-	}
+    // Ephemeral Storage Check
+    if podRequest.EphemeralStorage > 0 &&
+        podRequest.EphemeralStorage > (nodeInfo.Allocatable.EphemeralStorage - nodeInfo.Requested.EphemeralStorage) {
+        insufficientResources = append(insufficientResources, InsufficientResource{
+            ResourceName: v1.ResourceEphemeralStorage,
+            Reason:       "Insufficient ephemeral-storage",
+            Requested:    podRequest.EphemeralStorage,
+            Used:         nodeInfo.Requested.EphemeralStorage,
+            Capacity:     nodeInfo.Allocatable.EphemeralStorage,
+        })
+    }
 
-	// Custom Check for I/O Speed
-	requiredIOSpeed := podRequest.ScalarResources["custom.io-speed"]
-	if ioSpeedStr, ioSpeedOk := nodeInfo.Node().Labels["node.kubernetes.io/io-speed"]; ioSpeedOk && requiredIOSpeed > 0 {
-		nodeIOSpeed, err := strconv.Atoi(ioSpeedStr)
-		if err == nil && requiredIOSpeed > nodeIOSpeed {
-			insufficientResources = append(insufficientResources, InsufficientResource{
-				ResourceName: "I/O Speed",
-				Reason:       "Insufficient I/O speed",
-				Requested:    requiredIOSpeed,
-				Used:         nodeIOSpeed,
-				Capacity:     nodeIOSpeed,
-			})
-		}
-	}
+    // Custom Check for I/O Speed
+    requiredIOSpeed := podRequest.ScalarResources["custom.io-speed"]
+    nodeIOSpeed, ioSpeedOk := nodeInfo.Node().Labels["node.kubernetes.io/io-speed"]
 
-	// Custom Check for Latency
-	requiredLatency := podRequest.ScalarResources["custom.latency"]
-	if latencyStr, latencyOk := nodeInfo.Node().Labels["node.kubernetes.io/latency"]; latencyOk && requiredLatency > 0 {
-		nodeLatency, err := strconv.Atoi(latencyStr)
-		if err == nil && requiredLatency < nodeLatency {
-			insufficientResources = append(insufficientResources, InsufficientResource{
-				ResourceName: "Latency",
-				Reason:       "Insufficient latency capability",
-				Requested:    requiredLatency,
-				Used:         nodeLatency,
-				Capacity:     nodeLatency,
-			})
-		}
-	}
+    if ioSpeedOk {
+        nodeIOSpeedInt, err := strconv.Atoi(nodeIOSpeed) // Convert node I/O speed to int
+        if err != nil {
+            return insufficientResources // Handle the case where conversion fails
+        }
 
-	// Custom Check for Bandwidth
-	requiredBandwidth := podRequest.ScalarResources["custom.bandwidth"]
-	if bandwidthStr, bandwidthOk := nodeInfo.Node().Labels["node.kubernetes.io/bandwidth"]; bandwidthOk && requiredBandwidth > 0 {
-		nodeBandwidth, err := strconv.Atoi(bandwidthStr)
-		if err == nil && requiredBandwidth > nodeBandwidth {
-			insufficientResources = append(insufficientResources, InsufficientResource{
-				ResourceName: "Bandwidth",
-				Reason:       "Insufficient bandwidth",
-				Requested:    requiredBandwidth,
-				Used:         nodeBandwidth,
-				Capacity:     nodeBandwidth,
-			})
-		}
-	}
+        if requiredIOSpeed > 0 && requiredIOSpeed > nodeIOSpeedInt {
+            insufficientResources = append(insufficientResources, InsufficientResource{
+                ResourceName: "I/O Speed",
+                Reason:       "Insufficient I/O speed",
+                Requested:    requiredIOSpeed,
+                Used:         int64(nodeIOSpeedInt), // Convert nodeIOSpeedInt to int64
+                Capacity:     int64(nodeIOSpeedInt), // Convert nodeIOSpeedInt to int64
+            })
+        }
+    }
 
-	// Iterate over scalar resources
-	for rName, rQuant := range podRequest.ScalarResources {
-		// Skip in case request quantity is zero or it's an ignored resource
-		if rQuant == 0 || ignoredExtendedResources.Has(string(rName)) || ignoredResourceGroups.Has(strings.Split(string(rName), "/")[0]) {
-			continue
-		}
+    // Custom Check for Latency
+    requiredLatency := podRequest.ScalarResources["custom.latency"]
+    nodeLatency, latencyOk := nodeInfo.Node().Labels["node.kubernetes.io/latency"]
 
-		// Check if requested resource exceeds available resource
-		if rQuant > (nodeInfo.Allocatable.ScalarResources[rName] - nodeInfo.Requested.ScalarResources[rName]) {
-			insufficientResources = append(insufficientResources, InsufficientResource{
-				ResourceName: rName,
-				Reason:       fmt.Sprintf("Insufficient %v", rName),
-				Requested:    rQuant,
-				Used:         nodeInfo.Requested.ScalarResources[rName],
-				Capacity:     nodeInfo.Allocatable.ScalarResources[rName],
-			})
-		}
-	}
+    if latencyOk {
+        nodeLatencyInt, err := strconv.Atoi(nodeLatency) // Convert node latency to int
+        if err != nil {
+            return insufficientResources // Handle the case where conversion fails
+        }
 
-	return insufficientResources
+        if requiredLatency > 0 && requiredLatency < nodeLatencyInt {
+            insufficientResources = append(insufficientResources, InsufficientResource{
+                ResourceName: "Latency",
+                Reason:       "Insufficient latency capability",
+                Requested:    requiredLatency,
+                Used:         int64(nodeLatencyInt), // Convert nodeLatencyInt to int64
+                Capacity:     int64(nodeLatencyInt), // Convert nodeLatencyInt to int64
+            })
+        }
+    }
+
+    // Custom Check for Bandwidth
+    requiredBandwidth := podRequest.ScalarResources["custom.bandwidth"]
+    nodeBandwidth, bandwidthOk := nodeInfo.Node().Labels["node.kubernetes.io/bandwidth"]
+
+    if bandwidthOk {
+        nodeBandwidthInt, err := strconv.Atoi(nodeBandwidth) // Convert node bandwidth to int
+        if err != nil {
+            return insufficientResources // Handle the case where conversion fails
+        }
+
+        if requiredBandwidth > 0 && requiredBandwidth > nodeBandwidthInt {
+            insufficientResources = append(insufficientResources, InsufficientResource{
+                ResourceName: "Bandwidth",
+                Reason:       "Insufficient bandwidth",
+                Requested:    requiredBandwidth,
+                Used:         int64(nodeBandwidthInt), // Convert nodeBandwidthInt to int64
+                Capacity:     int64(nodeBandwidthInt), // Convert nodeBandwidthInt to int64
+            })
+        }
+    }
+
+    // Scalar resources check
+    for rName, rQuant := range podRequest.ScalarResources {
+        if rQuant == 0 {
+            continue
+        }
+
+        if v1helper.IsExtendedResourceName(rName) {
+            var rNamePrefix string
+            if ignoredResourceGroups.Len() > 0 {
+                rNamePrefix = strings.Split(string(rName), "/")[0]
+            }
+            if ignoredExtendedResources.Has(string(rName)) || ignoredResourceGroups.Has(rNamePrefix) {
+                continue
+            }
+        }
+
+        if rQuant > (nodeInfo.Allocatable.ScalarResources[rName] - nodeInfo.Requested.ScalarResources[rName]) {
+            insufficientResources = append(insufficientResources, InsufficientResource{
+                ResourceName: rName,
+                Reason:       fmt.Sprintf("Insufficient %v", rName),
+                Requested:    podRequest.ScalarResources[rName],
+                Used:         nodeInfo.Requested.ScalarResources[rName],
+                Capacity:     nodeInfo.Allocatable.ScalarResources[rName],
+            })
+        }
+    }
+
+    return insufficientResources
+
 }
 
 // Score invoked at the Score extension point.
