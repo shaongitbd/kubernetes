@@ -495,7 +495,7 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
     }
 
     // Custom Check for I/O Speed
-    requiredIOSpeed := podRequest.ScalarResources["custom.io-speed"]
+    requiredIOSpeed := podRequest.ScalarResources["custom/custom.io-speed"]
     nodeIOSpeed, ioSpeedOk := nodeInfo.Node().Labels["node.kubernetes.io/io-speed"]
 
     if ioSpeedOk {
@@ -517,7 +517,7 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
     }
 
     // Custom Check for Latency
-    requiredLatency := podRequest.ScalarResources["custom.latency"]
+    requiredLatency := podRequest.ScalarResources["custom/custom.latency"]
     nodeLatency, latencyOk := nodeInfo.Node().Labels["node.kubernetes.io/latency"]
 
     if latencyOk {
@@ -539,7 +539,7 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
     }
 
     // Custom Check for Bandwidth
-    requiredBandwidth := podRequest.ScalarResources["custom.bandwidth"]
+    requiredBandwidth := podRequest.ScalarResources["custom/custom.bandwidth"]
     nodeBandwidth, bandwidthOk := nodeInfo.Node().Labels["node.kubernetes.io/bandwidth"]
 
     if bandwidthOk {
