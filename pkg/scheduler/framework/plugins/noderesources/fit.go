@@ -424,17 +424,6 @@ func hasRestartableInitContainer(pod *v1.Pod) bool {
 
 
 
-func hasRestartableInitContainer(pod *v1.Pod) bool {
-	for _, c := range pod.Spec.InitContainers {
-		if c.RestartPolicy != nil && *c.RestartPolicy == v1.ContainerRestartPolicyAlways {
-			return true
-		}
-	}
-	return false
-}
-
-
-
 
 
 
