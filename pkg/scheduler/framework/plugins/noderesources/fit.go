@@ -515,7 +515,8 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
             return insufficientResources // Handle the case where conversion fails
         }
 
-        if requiredIOSpeed > 0 && requiredIOSpeed > nodeIOSpeedInt {
+        // Convert nodeIOSpeedInt to int64 for comparison
+        if requiredIOSpeed > 0 && requiredIOSpeed > int64(nodeIOSpeedInt) {
             insufficientResources = append(insufficientResources, InsufficientResource{
                 ResourceName: "I/O Speed",
                 Reason:       "Insufficient I/O speed",
@@ -536,7 +537,8 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
             return insufficientResources // Handle the case where conversion fails
         }
 
-        if requiredLatency > 0 && requiredLatency < nodeLatencyInt {
+        // Convert nodeLatencyInt to int64 for comparison
+        if requiredLatency > 0 && requiredLatency < int64(nodeLatencyInt) {
             insufficientResources = append(insufficientResources, InsufficientResource{
                 ResourceName: "Latency",
                 Reason:       "Insufficient latency capability",
@@ -557,7 +559,8 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
             return insufficientResources // Handle the case where conversion fails
         }
 
-        if requiredBandwidth > 0 && requiredBandwidth > nodeBandwidthInt {
+        // Convert nodeBandwidthInt to int64 for comparison
+        if requiredBandwidth > 0 && requiredBandwidth > int64(nodeBandwidthInt) {
             insufficientResources = append(insufficientResources, InsufficientResource{
                 ResourceName: "Bandwidth",
                 Reason:       "Insufficient bandwidth",
@@ -596,7 +599,6 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo, ignor
     }
 
     return insufficientResources
-
 }
 
 // Score invoked at the Score extension point.
