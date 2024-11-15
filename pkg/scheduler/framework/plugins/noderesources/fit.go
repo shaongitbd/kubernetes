@@ -17,6 +17,7 @@ limitations under the License.
 package noderesources
 
 import (
+	  "strconv"
 	"context"
 	"fmt"
 	"strings"
